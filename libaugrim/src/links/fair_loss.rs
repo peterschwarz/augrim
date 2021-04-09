@@ -12,10 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate log;
+use crate::error::InternalError;
+use crate::message::Message;
+use crate::process::Process;
 
-pub mod error;
-pub mod message;
-pub mod network;
-pub mod process;
+pub trait FairLossSender<PROCESS, MESSAGE>
+where
+    PROCESS: Process,
+    MESSAGE: Message,
+{
+    fn send(to_process: &PROCESS, message: MESSAGE) -> Result<(), InternalError>;
+}
+
+pub trait FairLossRecipient<PROCESS, MESSAGE>
+where
+    PROCESS: Process,
+    MESSAGE: Message,
+{
+    fn deliver(from_process: &PROCESS, message: MESSAGE) -> Result<(), InternalError>;
+}

@@ -12,10 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate log;
+use crate::error::InternalError;
+use crate::message::Message;
+use crate::process::Process;
 
-pub mod error;
-pub mod message;
-pub mod network;
-pub mod process;
+pub trait NetworkSender<P, M>
+where
+    P: Process,
+    M: Message,
+{
+    fn send(to_process: &P, message: M) -> Result<(), InternalError>;
+}
+
+pub trait NetworkReceiver<P, M>
+where
+    P: Process,
+    M: Message,
+{
+    fn recv(from_process: &P, message: M) -> Result<(), InternalError>;
+}

@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate log;
+mod fair_loss;
+mod stubborn;
+mod perfect;
 
-pub mod error;
-pub mod message;
-pub mod network;
-pub mod process;
+pub use link::{FairLossSender, FairLossReceiver};
