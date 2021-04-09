@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate log;
+mod best_effort;
 
-pub mod broadcast;
-pub mod error;
-pub mod message;
-pub mod network;
-pub mod process;
+pub use best_effort::{BestEffortBroadcastReceiver, BestEffortBroadcastSender};
