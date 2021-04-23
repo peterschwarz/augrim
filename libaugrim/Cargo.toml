@@ -34,4 +34,9 @@ experimental = [
     # The experimental feature extends stable:
     "stable",
     # The following features are experimental:
+    "links",
+    "links-fair-loss",
 ]
+
+links = []
+links-fair-loss = ["links"]

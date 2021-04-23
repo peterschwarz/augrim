@@ -16,3 +16,5 @@
 extern crate log;
 
 pub mod error;
+#[cfg(feature = "links")]
+pub mod links;
