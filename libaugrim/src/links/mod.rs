@@ -14,6 +14,8 @@
 
 #[cfg(feature = "links-fair-loss")]
 pub mod fair_loss;
+#[cfg(feature = "links-stubborn")]
+pub mod stubborn;
 
 use crate::error::InternalError;
 
