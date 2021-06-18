@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::error::InternalError;
+use crate::process::Process;
+use crate::message::Message;
+
 use super::{FairLossSender, FairLossReceiver};
 
 pub trait StubbornSender<P, M>
@@ -35,29 +39,39 @@ struct DefaultStubbornSender<P, M, S>
 where
     P: Process,
     M: Message,
-    S: FairLossSender,
+    S: FairLossSender<P, M>,
 {
     fair_loss_sender: S,
     process_phantom: std::marker::PhantomData<P>,
     message_phantom: std::marker::PhantomData<M>,
 }
 
-impl<P, M, S> DefaultStubbornSender<P, M, S> {
+impl<P, M, S> DefaultStubbornSender<P, M, S>
+where
+    P: Process,
+    M: Message,
+    S: FairLossSender<P, M>,
+{
     fn new(fair_loss_sender: S) -> Self {
         DefaultStubbornSender {
             fair_loss_sender,
-            process_phantom: std::marker::PhantomData<P>,
-            message_phantom: std::marker::PhantomData<M>,
+            process_phantom: std::marker::PhantomData,
+            message_phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl<P, M> StubbornSender<P, M> for DefaultStubornSender<P, M>  {
+impl<P, M, S> StubbornSender<P, M> for DefaultStubbornSender<P, M, S>
+where
+    P: Process,
+    M: Message,
+    S: FairLossSender<P, M>,
+{
     fn send(to_process: &P, message: M) -> Result<(), InternalError> {
         unimplemented!()
     }
 }
 
-impl<P, M> FairLossReceiver for StubbornLossReceiver<P, M> {
-
-}
+//impl<P, M> FairLossReceiver for StubbornReceiver<P, M> {
+//
+//}

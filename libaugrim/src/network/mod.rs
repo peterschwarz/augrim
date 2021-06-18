@@ -21,7 +21,7 @@ where
     P: Process,
     M: Message,
 {
-    fn send(to_process: &P, message: M) -> Result<(), InternalError>;
+    fn send(&self, to_process: &P, message: M) -> Result<(), InternalError>;
 }
 
 pub trait NetworkReceiver<P, M>
@@ -29,5 +29,5 @@ where
     P: Process,
     M: Message,
 {
-    fn recv(from_process: &P, message: M) -> Result<(), InternalError>;
+    fn recv(&self, from_process: &P, message: M) -> Result<(), InternalError>;
 }

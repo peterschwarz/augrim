@@ -14,7 +14,7 @@
 
 pub struct InternalError;
 
-use crate::broadcast::{BestEffortBroadcastReceiver, BestEffortBroadcastSender};
+use crate::broadcast::BestEffortBroadcastSender;
 
 // p50
 trait PerfectFailureDetectorReceiver<P> {
@@ -43,10 +43,10 @@ pub enum FloodingConsensusMessage<V, PROPOSAL> {
 }
 
 // p206
-pub struct FloodingConsensus<D, P, S, V, PROPOSAL>
+pub struct FloodingConsensus<D, P, V, PROPOSAL>
 where
     D: PerfectFailureDetectorReceiver<P>,
-    S: BestEffortBroadcastSender<FloodingConsensusMessage<V, PROPOSAL>>,
+    P: Process,
 {
     correct: Vec<P>,
     round: u64,
@@ -55,19 +55,18 @@ where
     proposals: Vec<Vec<PROPOSAL>>,
 
     detector: D,
-    sender: S,
+    sender: BestEffortBroadcastSender<FloodingConsensusMessage<V, PROPOSAL>>,
     process_phantom: std::marker::PhantomData<P>,
     value_phantom: std::marker::PhantomData<V>,
     proposal_phantom: std::marker::PhantomData<PROPOSAL>,
 }
 
-impl<D, P, S, V, PROPOSAL> FloodingConsensus<D, P, S, V, PROPOSAL>
+impl<D, P, V, PROPOSAL> FloodingConsensus<D, P, V, PROPOSAL>
 where
     D: PerfectFailureDetectorReceiver<P>,
-    S: BestEffortBroadcastSender<FloodingConsensusMessage<V, PROPOSAL>>,
-    P: Clone,
+    P: Process + Clone,
 {
-    pub fn new(processes: Vec<P>, detector: D, sender: S) -> Self {
+    pub fn new(processes: Vec<P>, detector: D, sender: BestEffortBroadcastSender<FloodingConsensusMessage<V, PROPOSAL>>) -> Self {
         FloodingConsensus {
             correct: processes.clone(),
             round: 1,
@@ -83,22 +82,21 @@ where
     }
 }
 
-impl<D, P, S, V, PROPOSAL> Consensus<V> for FloodingConsensus<D, P, S, V, PROPOSAL>
+impl<D, P, V, PROPOSAL> Consensus<V> for FloodingConsensus<D, P, V, PROPOSAL>
 where
     D: PerfectFailureDetectorReceiver<P>,
-    S: BestEffortBroadcastSender<FloodingConsensusMessage<V, PROPOSAL>>,
+    P: Process,
 {
     fn propose(value: V) -> Result<(), InternalError> {
         unimplemented!()
     }
 }
 
-impl<D, P, S, V, PROPOSAL> PerfectFailureDetectorReceiver<P>
-    for FloodingConsensus<D, P, S, V, PROPOSAL>
+impl<D, P, V, PROPOSAL> PerfectFailureDetectorReceiver<P>
+    for FloodingConsensus<D, P, V, PROPOSAL>
 where
     D: PerfectFailureDetectorReceiver<P>,
-    S: BestEffortBroadcastSender<FloodingConsensusMessage<V, PROPOSAL>>,
-    P: Eq,
+    P: Process,
 {
     fn crash(&mut self, process: P) -> Result<(), InternalError> {
         match self.correct.iter().position(|p| *p == process) {
@@ -108,5 +106,79 @@ where
             None => (),
         };
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+    struct TestProcess {
+        id: u64,
+    }
+
+    impl Process for TestProcess {}
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct TestMessage {
+        msg: String,
+    }
+
+    impl TestMessage {
+        fn new<'a>(msg: &'a dyn ToString) -> Self {
+            TestMessage {
+                msg: msg.to_string()
+            }
+        }
+    }
+
+    impl Message for TestMessage {}
+
+    #[derive(Clone)]
+    struct Receiver {
+        delivered: Arc<Mutex<Vec<TestMessage>>>,
+    }
+
+    impl Receiver {
+        fn new() -> Self {
+            Receiver {
+                delivered: Arc::new(Mutex::new(vec![]))
+            }
+        }
+
+        fn pop(&mut self) -> Option<TestMessage> {
+            self.delivered.lock().unwrap().pop()
+        }
+    }
+
+    impl IntraProcessNetworkReceiver<TestMessage> for Receiver {
+        fn deliver(&mut self, message: TestMessage) -> Result<(), IntraProcessNetworkError> {
+            self.delivered.lock().unwrap().push(message);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_send_receive() {
+        let mut network: IntraProcessNetwork<TestProcess, TestMessage, Receiver> = IntraProcessNetwork::new().unwrap();
+
+        let process1 = TestProcess { id: 1 };
+        let process2 = TestProcess { id: 2 };
+
+        let mut receiver1 = Receiver::new();
+        let mut receiver2 = Receiver::new();
+
+        network.add_process(process1, receiver1.clone());
+        network.add_process(process2, receiver2.clone());
+
+        let sender = network.sender();
+        sender.send(process1, TestMessage::new(&"Message 1"));
+        sender.send(process2, TestMessage::new(&"Message 2"));
+
+        network.shutdown().unwrap();
+
+        assert_eq!(receiver1.pop(), Some(TestMessage { msg: "Message 1".to_string() }));
+        assert_eq!(receiver2.pop(), Some(TestMessage { msg: "Message 2".to_string() }));
     }
 }

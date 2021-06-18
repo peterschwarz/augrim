@@ -14,27 +14,43 @@
 
 /// p75
 use crate::error::InternalError;
+use crate::message::Message;
 use crate::network::NetworkSender;
+use crate::process::Process;
 
-struct BestEffortBroadcastSender<PROCESS, MESSAGE, NETWORK>
+pub struct BestEffortBroadcastSender<P, M, N>
 where
-    NETWORK: NetworkSender,
+    P: Process,
+    M: Message,
+    N: NetworkSender<P, M>,
 {
-    network_sender: NETWORK,
-    processes: Vec<PROCESS>,
+    network_sender: N,
+    processes: Vec<P>,
+    message_phantom: std::marker::PhantomData<M>,
 }
 
-impl<PROCESS, MESSAGE, NETWORK> BestEffortBroadcastSender<PROCESS, MESSAGE, NETWORK> {
-    fn new(network_sender: NETWORK, processes: Vec<PROCESS>) -> Self {}
+impl<P, M, N> BestEffortBroadcastSender<P, M, N>
+where
+    P: Process,
+    M: Message,
+    N: NetworkSender<P, M>,
+{
+    pub fn new(network_sender: N, processes: Vec<P>) -> Self {
+        BestEffortBroadcastSender {
+            network_sender,
+            processes,
+            message_phantom: std::marker::PhantomData,
+        }
+    }
 
-    fn broadcast(&self, message: MESSAGE) -> Result<(), InternalError> {
-        for process in self.processes {
-            self.network_sender.send(process, message)?;
+    pub fn broadcast(&self, message: &M) -> Result<(), InternalError> {
+        for process in self.processes.clone() {
+            self.network_sender.send(&process, message.clone())?;
         }
         Ok(())
     }
 }
 
-pub trait BestEffortBroadcastReceiver<PROCESS, MESSAGE> {
-    fn deliver(process: PROCESS, message: MESSAGE) -> Result<(), InternalError>;
+pub trait BestEffortBroadcastReceiver<P, M> {
+    fn deliver(process: P, message: M) -> Result<(), InternalError>;
 }

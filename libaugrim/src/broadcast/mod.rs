@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "broadcast-best-effort")]
 mod best_effort;
 
+#[cfg(feature = "broadcast-best-effort")]
 pub use best_effort::{BestEffortBroadcastReceiver, BestEffortBroadcastSender};

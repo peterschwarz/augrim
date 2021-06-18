@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "links-fair-loss")]
-mod fair_loss;
-#[cfg(feature = "links-stubborn")]
-mod stubborn;
-#[cfg(feature = "links-perfect")]
-mod perfect;
 
-#[cfg(feature = "links-fair-loss")]
-pub use fair_loss::{FairLossSender, FairLossReceiver};
+#[cfg(feature = "communication-internal")]
+mod internal;
+
+//#[cfg(feature = "communication-internal")]
+//pub use internal::InternalCommunicationa;
