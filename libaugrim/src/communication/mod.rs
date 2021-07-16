@@ -14,7 +14,7 @@
 
 
 #[cfg(feature = "communication-internal")]
-mod internal;
+pub(crate) mod internal;
 
 //#[cfg(feature = "communication-internal")]
 //pub use internal::InternalCommunicationa;

@@ -109,7 +109,7 @@ where
     P: Process,
     M: Message,
 {
-    fn send(&self, process: P, message: M) -> Result<(), IntraProcessNetworkError> {
+    pub fn send(&self, process: P, message: M) -> Result<(), IntraProcessNetworkError> {
         Ok(self.inner.send(ControlMessage::Message(process, message)).unwrap()) // TODO unwrap
     }
 }

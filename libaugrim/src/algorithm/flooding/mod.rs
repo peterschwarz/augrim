@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub struct InternalError;
-
 use crate::broadcast::BestEffortBroadcastSender;
+use crate::error::InternalError;
+use crate::message::Message;
+use crate::network::NetworkSender;
+use crate::process::Process;
 
 // p50
-trait PerfectFailureDetectorReceiver<P> {
+pub trait PerfectFailureDetectorReceiver<P> {
     fn crash(&mut self, process: P) -> Result<(), InternalError>;
 }
 
@@ -32,7 +34,8 @@ trait Consensus<V> {
 }
 
 // p206
-pub enum FloodingConsensusMessage<V, PROPOSAL> {
+#[derive(Clone)]
+pub enum FloodingConsensusMessage<V: Clone, PROPOSAL: Clone> {
     Decided {
         value: V,
     },
@@ -42,11 +45,16 @@ pub enum FloodingConsensusMessage<V, PROPOSAL> {
     },
 }
 
+impl<V: Clone, PROPOSAL: Clone> Message for FloodingConsensusMessage<V, PROPOSAL> {}
+
 // p206
-pub struct FloodingConsensus<D, P, V, PROPOSAL>
+pub struct FloodingConsensus<D, P, V, PROPOSAL, N>
 where
     D: PerfectFailureDetectorReceiver<P>,
     P: Process,
+    V: Clone,
+    PROPOSAL: Clone,
+    N: NetworkSender<P, FloodingConsensusMessage<V, PROPOSAL>>,
 {
     correct: Vec<P>,
     round: u64,
@@ -55,18 +63,25 @@ where
     proposals: Vec<Vec<PROPOSAL>>,
 
     detector: D,
-    sender: BestEffortBroadcastSender<FloodingConsensusMessage<V, PROPOSAL>>,
+    sender: BestEffortBroadcastSender<P, FloodingConsensusMessage<V, PROPOSAL>, N>,
     process_phantom: std::marker::PhantomData<P>,
     value_phantom: std::marker::PhantomData<V>,
     proposal_phantom: std::marker::PhantomData<PROPOSAL>,
 }
 
-impl<D, P, V, PROPOSAL> FloodingConsensus<D, P, V, PROPOSAL>
+impl<D, P, V, PROPOSAL, N> FloodingConsensus<D, P, V, PROPOSAL, N>
 where
     D: PerfectFailureDetectorReceiver<P>,
     P: Process + Clone,
+    V: Clone,
+    PROPOSAL: Clone,
+    N: NetworkSender<P, FloodingConsensusMessage<V, PROPOSAL>>,
 {
-    pub fn new(processes: Vec<P>, detector: D, sender: BestEffortBroadcastSender<FloodingConsensusMessage<V, PROPOSAL>>) -> Self {
+    pub fn new(
+        processes: Vec<P>,
+        detector: D,
+        sender: BestEffortBroadcastSender<P, FloodingConsensusMessage<V, PROPOSAL>, N>,
+    ) -> Self {
         FloodingConsensus {
             correct: processes.clone(),
             round: 1,
@@ -82,21 +97,27 @@ where
     }
 }
 
-impl<D, P, V, PROPOSAL> Consensus<V> for FloodingConsensus<D, P, V, PROPOSAL>
+impl<D, P, V, PROPOSAL, N> Consensus<V> for FloodingConsensus<D, P, V, PROPOSAL, N>
 where
     D: PerfectFailureDetectorReceiver<P>,
     P: Process,
+    V: Clone,
+    PROPOSAL: Clone,
+    N: NetworkSender<P, FloodingConsensusMessage<V, PROPOSAL>>,
 {
     fn propose(value: V) -> Result<(), InternalError> {
         unimplemented!()
     }
 }
 
-impl<D, P, V, PROPOSAL> PerfectFailureDetectorReceiver<P>
-    for FloodingConsensus<D, P, V, PROPOSAL>
+impl<D, P, V, PROPOSAL, N> PerfectFailureDetectorReceiver<P>
+    for FloodingConsensus<D, P, V, PROPOSAL, N>
 where
     D: PerfectFailureDetectorReceiver<P>,
     P: Process,
+    V: Clone,
+    PROPOSAL: Clone,
+    N: NetworkSender<P, FloodingConsensusMessage<V, PROPOSAL>>,
 {
     fn crash(&mut self, process: P) -> Result<(), InternalError> {
         match self.correct.iter().position(|p| *p == process) {
@@ -113,6 +134,13 @@ where
 mod test {
     use super::*;
 
+    use std::sync::{Arc, Mutex};
+
+    use crate::communication::internal::{
+        IntraProcessNetwork, IntraProcessNetworkError, IntraProcessNetworkReceiver,
+    };
+    use crate::message::Message;
+
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
     struct TestProcess {
         id: u64,
@@ -128,7 +156,7 @@ mod test {
     impl TestMessage {
         fn new<'a>(msg: &'a dyn ToString) -> Self {
             TestMessage {
-                msg: msg.to_string()
+                msg: msg.to_string(),
             }
         }
     }
@@ -143,7 +171,7 @@ mod test {
     impl Receiver {
         fn new() -> Self {
             Receiver {
-                delivered: Arc::new(Mutex::new(vec![]))
+                delivered: Arc::new(Mutex::new(vec![])),
             }
         }
 
@@ -161,7 +189,8 @@ mod test {
 
     #[test]
     fn test_send_receive() {
-        let mut network: IntraProcessNetwork<TestProcess, TestMessage, Receiver> = IntraProcessNetwork::new().unwrap();
+        let mut network: IntraProcessNetwork<TestProcess, TestMessage, Receiver> =
+            IntraProcessNetwork::new().unwrap();
 
         let process1 = TestProcess { id: 1 };
         let process2 = TestProcess { id: 2 };
@@ -178,7 +207,17 @@ mod test {
 
         network.shutdown().unwrap();
 
-        assert_eq!(receiver1.pop(), Some(TestMessage { msg: "Message 1".to_string() }));
-        assert_eq!(receiver2.pop(), Some(TestMessage { msg: "Message 2".to_string() }));
+        assert_eq!(
+            receiver1.pop(),
+            Some(TestMessage {
+                msg: "Message 1".to_string()
+            })
+        );
+        assert_eq!(
+            receiver2.pop(),
+            Some(TestMessage {
+                msg: "Message 2".to_string()
+            })
+        );
     }
 }
